@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Brew Math &#183; AppADay 088</title>
+<meta name="description" content="Homebrew gravity calculator: enter original and final gravity to get ABV, apparent and real attenuation, and calories, with a refractometer-correction toggle.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1a1209;
+    --bg2:#221708;
+    --panel:#2c1f10;
+    --panel2:#34260f;
+    --line:#4a3618;
+    --amber:#f2a900;
+    --amber-soft:#e8b04b;
+    --cream:#f7ecd8;
+    --muted:#c3a878;
+    --dim:#96814f;
+    --good:#7fc26a;
+    --bad:#e57a5a;
+    --shadow:0 14px 40px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    min-height:100dvh;
+    background:
+      radial-gradient(1200px 500px at 50% -10%, #3a2911 0%, transparent 60%),
+      linear-gradient(180deg,var(--bg) 0%, var(--bg2) 100%);
+    color:var(--cream);
+    font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;
+  }
+  a{color:inherit}
+
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:12px 16px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,0));
+    position:sticky;top:0;z-index:5;backdrop-filter:blur(6px);
+  }
+  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .num{
+    font-family:'Fraunces',serif;font-weight:900;font-size:13px;letter-spacing:.5px;
+    color:var(--bg);background:var(--amber);padding:3px 8px;border-radius:6px;
+    flex:0 0 auto;
+  }
+  .brand b{font-family:'Fraunces',serif;font-weight:900;font-size:17px;letter-spacing:.2px;white-space:nowrap}
+  .home{
+    font-size:12px;font-weight:600;color:var(--muted);text-decoration:none;
+    border:1px solid var(--line);padding:6px 10px;border-radius:8px;white-space:nowrap;
+    transition:.15s;
+  }
+  .home:hover{color:var(--cream);border-color:var(--amber)}
+
+  .wrap{
+    width:100%;max-width:760px;margin:0 auto;padding:20px 16px 40px;
+    display:flex;flex-direction:column;gap:18px;flex:1 1 auto;
+  }
+
+  .lede{
+    font-size:14.5px;line-height:1.55;color:var(--muted);
+  }
+  .lede b{color:var(--cream);font-weight:600}
+
+  .modewrap{
+    display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:5px;
+  }
+  .modewrap button{
+    flex:1;border:0;background:transparent;color:var(--muted);
+    font-family:'Inter';font-weight:600;font-size:13.5px;padding:11px 8px;
+    border-radius:8px;cursor:pointer;transition:.15s;line-height:1.2;
+  }
+  .modewrap button .sub{display:block;font-weight:400;font-size:11px;color:var(--dim);margin-top:2px}
+  .modewrap button[aria-pressed="true"]{
+    background:linear-gradient(180deg,var(--amber),#d8960a);color:#1a1209;box-shadow:var(--shadow);
+  }
+  .modewrap button[aria-pressed="true"] .sub{color:#5a3f0c}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:16px;padding:18px 16px;box-shadow:var(--shadow);
+  }
+  .card h2{
+    margin:0 0 14px;font-family:'Fraunces',serif;font-weight:600;font-size:16px;
+    color:var(--amber-soft);letter-spacing:.2px;
+  }
+
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:6px}
+  .field .hint{font-weight:400;color:var(--dim);font-size:11.5px}
+  .field input{
+    width:100%;background:#14100a;border:1px solid var(--line);border-radius:10px;
+    color:var(--cream);font-family:'Fraunces',serif;font-weight:600;font-size:22px;
+    padding:12px 12px;outline:none;transition:.15s;
+    -moz-appearance:textfield;
+  }
+  .field input::-webkit-outer-spin-button,.field input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .field input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(242,169,0,.15)}
+  .field input.err{border-color:var(--bad);box-shadow:0 0 0 3px rgba(229,122,90,.15)}
+
+  .wcfrow{grid-column:1 / -1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding-top:2px}
+  .wcfrow .field{flex:0 0 130px}
+  .wcfnote{font-size:11.5px;color:var(--dim);line-height:1.45;flex:1 1 160px;min-width:150px}
+  .derived{
+    grid-column:1 / -1;font-size:12.5px;color:var(--muted);
+    border-top:1px dashed var(--line);padding-top:12px;margin-top:2px;line-height:1.5;
+  }
+  .derived b{color:var(--amber-soft);font-family:'Fraunces',serif}
+
+  .actions{display:flex;gap:10px;margin-top:16px}
+  .btn{
+    border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    font-family:'Inter';font-weight:600;font-size:13px;padding:10px 16px;border-radius:10px;
+    cursor:pointer;transition:.15s;
+  }
+  .btn:hover{color:var(--cream);border-color:var(--amber)}
+
+  .msg{font-size:13px;color:var(--bad);margin-top:12px;min-height:0;line-height:1.45;display:none}
+  .msg.show{display:block}
+
+  .callink{
+    border:1px solid var(--line);background:transparent;color:var(--amber-soft);
+    font-family:'Inter';font-weight:600;font-size:12px;padding:9px 13px;border-radius:9px;
+    cursor:pointer;transition:.15s;white-space:nowrap;flex:0 0 auto;align-self:flex-start;
+  }
+  .callink:hover{border-color:var(--amber);color:var(--cream)}
+  .callink[aria-expanded="true"]{background:rgba(242,169,0,.12);border-color:var(--amber);color:var(--cream)}
+  .calpanel{
+    grid-column:1 / -1;background:#14100a;border:1px solid var(--line);
+    border-radius:12px;padding:14px;margin-top:2px;
+  }
+  .calhead{font-family:'Fraunces',serif;font-weight:600;font-size:14px;color:var(--amber-soft);margin-bottom:6px}
+  .calintro{font-size:12.5px;color:var(--muted);line-height:1.5;margin:0 0 12px}
+  .calfields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .calactions{display:flex;gap:10px}
+  .btn.calc{background:linear-gradient(180deg,var(--amber),#d8960a);color:#1a1209;border-color:transparent}
+  .btn.calc:hover{color:#1a1209;border-color:transparent;filter:brightness(1.06)}
+  .calresult{font-size:13px;color:var(--good);margin-top:12px;line-height:1.5}
+  .calresult.warn{color:var(--amber-soft)}
+  .calresult.err{color:var(--bad)}
+
+  .results{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .res{
+    background:linear-gradient(180deg,#20160b,#1a1108);border:1px solid var(--line);
+    border-radius:14px;padding:14px 15px;position:relative;overflow:hidden;
+  }
+  .res::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--amber);opacity:.85}
+  .res .k{font-size:11.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
+  .res .v{font-family:'Fraunces',serif;font-weight:900;font-size:32px;line-height:1.05;margin-top:6px;color:var(--cream);font-variant-numeric:tabular-nums}
+  .res .u{font-size:16px;color:var(--amber-soft);font-weight:600;margin-left:2px}
+  .res .s{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.4}
+  .res.dim .v{color:var(--dim)}
+
+  details.guide{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;
+  }
+  details.guide>summary{
+    list-style:none;cursor:pointer;padding:16px;display:flex;align-items:center;gap:10px;
+    font-family:'Fraunces',serif;font-weight:600;font-size:16px;color:var(--amber-soft);
+  }
+  details.guide>summary::-webkit-details-marker{display:none}
+  .chev{margin-left:auto;color:var(--muted);transition:.2s;font-size:13px;font-family:'Inter'}
+  details.guide[open] .chev{transform:rotate(180deg)}
+  .guidebody{padding:0 16px 18px;font-size:13.5px;line-height:1.62;color:var(--muted)}
+  .guidebody h3{font-family:'Inter';font-weight:700;font-size:13px;letter-spacing:.4px;
+    text-transform:uppercase;color:var(--amber-soft);margin:18px 0 8px}
+  .guidebody h3:first-child{margin-top:6px}
+  .guidebody p{margin:0 0 10px}
+  .guidebody b{color:var(--cream);font-weight:600}
+  .guidebody code{
+    font-family:'Fraunces',serif;font-weight:600;background:#14100a;border:1px solid var(--line);
+    padding:1px 6px;border-radius:6px;color:var(--amber-soft);font-size:12.5px;
+  }
+  .guidebody ul{margin:0 0 10px;padding-left:18px}
+  .guidebody li{margin:4px 0}
+  .formula{
+    background:#14100a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    font-family:'Fraunces',serif;font-weight:600;color:var(--cream);font-size:13px;
+    line-height:1.7;margin:0 0 10px;overflow-x:auto;
+  }
+  .disclaim{font-size:12px;color:var(--dim);font-style:italic;margin-top:6px}
+
+  footer{
+    text-align:center;padding:18px 16px 28px;color:var(--dim);font-size:12px;line-height:1.6;
+  }
+  footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--line)}
+  footer a:hover{color:var(--amber-soft)}
+
+  @media (max-width:460px){
+    .results{grid-template-columns:1fr}
+    .calfields{grid-template-columns:1fr}
+    .res .v{font-size:30px}
+    .brand b{font-size:15px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="num">088</span>
+    <b>Brew Math</b>
+  </div>
+  <a class="home" href="https://augustineiacopelli.github.io/appaday/">&#8592; AppADay</a>
+</div>
+
+<main class="wrap">
+
+  <p class="lede">Enter your <b>original</b> and <b>final gravity</b> to read <b>ABV</b>, <b>apparent and real attenuation</b>, and rough <b>calories</b>. Using a refractometer for the final reading? Flip the mode so the alcohol skew gets corrected.</p>
+
+  <div class="modewrap" role="tablist" aria-label="Reading source">
+    <button id="mHyd" aria-pressed="true">Hydrometer
+      <span class="sub">enter specific gravity</span>
+    </button>
+    <button id="mRef" aria-pressed="false">Refractometer
+      <span class="sub">enter degrees Brix</span>
+    </button>
+  </div>
+
+  <section class="card">
+    <h2 id="inputTitle">Gravity readings</h2>
+    <div class="fields" id="fields">
+
+      <!-- Hydrometer inputs -->
+      <div class="field hyd">
+        <label for="ogSg">Original Gravity <span class="hint">(OG)</span></label>
+        <input id="ogSg" type="number" inputmode="decimal" step="0.001" placeholder="1.052">
+      </div>
+      <div class="field hyd">
+        <label for="fgSg">Final Gravity <span class="hint">(FG)</span></label>
+        <input id="fgSg" type="number" inputmode="decimal" step="0.001" placeholder="1.010">
+      </div>
+
+      <!-- Refractometer inputs -->
+      <div class="field ref" hidden>
+        <label for="ogBx">Original reading <span class="hint">(&#176;Bx)</span></label>
+        <input id="ogBx" type="number" inputmode="decimal" step="0.1" placeholder="12.9">
+      </div>
+      <div class="field ref" hidden>
+        <label for="fgBx">Final reading <span class="hint">(&#176;Bx)</span></label>
+        <input id="fgBx" type="number" inputmode="decimal" step="0.1" placeholder="6.4">
+      </div>
+      <div class="wcfrow ref" hidden>
+        <div class="field">
+          <label for="wcf">Wort factor <span class="hint">(WCF)</span></label>
+          <input id="wcf" type="number" inputmode="decimal" step="0.01" value="1.04">
+        </div>
+        <div class="wcfnote">Refractometers read a touch high on wort. This factor divides the Brix reading to true Brix. Typical range 1.02 to 1.06; 1.04 is a safe default.</div>
+        <button class="callink" id="calToggle" type="button" aria-expanded="false">Calibrate</button>
+      </div>
+      <div class="calpanel" id="calpanel" hidden>
+        <div class="calhead">Find your wort factor</div>
+        <p class="calintro">On one pre-yeast wort sample, take a refractometer reading and a temperature-corrected hydrometer reading. Enter both and this solves the factor for your instrument, then fills it in above.</p>
+        <div class="calfields">
+          <div class="field">
+            <label for="calBx">Refractometer <span class="hint">(&#176;Bx)</span></label>
+            <input id="calBx" type="number" inputmode="decimal" step="0.1" placeholder="12.9">
+          </div>
+          <div class="field">
+            <label for="calSg">Hydrometer OG <span class="hint">(SG)</span></label>
+            <input id="calSg" type="number" inputmode="decimal" step="0.001" placeholder="1.050">
+          </div>
+        </div>
+        <div class="calactions">
+          <button class="btn calc" id="calSolve" type="button">Calculate factor</button>
+          <button class="btn" id="calClose" type="button">Close</button>
+        </div>
+        <div class="calresult" id="calresult" hidden></div>
+      </div>
+      <div class="derived ref" id="derived" hidden></div>
+
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="reset">Reset</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <section class="results" id="results" aria-live="polite">
+    <div class="res dim" id="rAbv"><div class="k">ABV</div><div class="v">&#8212;</div><div class="s">alcohol by volume</div></div>
+    <div class="res dim" id="rApp"><div class="k">Apparent attenuation</div><div class="v">&#8212;</div><div class="s">from measured gravity</div></div>
+    <div class="res dim" id="rReal"><div class="k">Real attenuation</div><div class="v">&#8212;</div><div class="s">alcohol-adjusted</div></div>
+    <div class="res dim" id="rCal"><div class="k">Calories</div><div class="v">&#8212;</div><div class="s">per serving</div></div>
+  </section>
+
+  <details class="guide">
+    <summary>How to use it &amp; get correct numbers <span class="chev">&#9660;</span></summary>
+    <div class="guidebody">
+
+      <h3>Hydrometer mode (specific gravity)</h3>
+      <p>Type each reading as a full <b>specific gravity</b> value, digits and all: <code>1.052</code> for the original, <code>1.010</code> for the final. Do not enter just the gravity points (<b>52</b> or <b>10</b>) or a Plato number, the math depends on the <b>1.0xx</b> form.</p>
+      <ul>
+        <li><b>Temperature-correct first.</b> Hydrometers are calibrated at one temperature, usually 60&#176;F / 20&#176;C. A warm sample reads low. Adjust to the calibration temperature before entering, or your ABV will drift.</li>
+        <li>Read at eye level, at the bottom of the meniscus, with no clinging bubbles on the stem.</li>
+        <li>The final gravity must be <b>lower</b> than the original. If it is not, fermentation is unfinished or a reading is off.</li>
+      </ul>
+
+      <h3>Refractometer mode (Brix)</h3>
+      <p>Enter both readings in <b>degrees Brix</b> (&#176;Bx) exactly as they appear in the eyepiece. Two things make refractometer results honest:</p>
+      <ul>
+        <li><b>Set your Wort Correction Factor.</b> Refractometers are calibrated for sugar water, and wort reads slightly high. Dividing by the WCF converts the reading to true Brix. The quickest way to get yours: tap <b>Calibrate</b>, enter one refractometer reading alongside the temperature-corrected hydrometer OG from the same pre-yeast sample, and it solves the factor and fills it in. If you have never calibrated, leave it at <b>1.04</b>.</li>
+        <li><b>The alcohol correction is automatic.</b> Once fermentation starts, alcohol bends light and a refractometer can no longer read gravity directly. This app runs the Terrill cubic correction on your final Brix to recover the true final gravity, then does the rest of the math on that. The corrected OG and FG are shown under the inputs so you can sanity-check them.</li>
+        <li>Take readings near room temperature. Automatic-temperature-compensating (ATC) units handle small swings on their own.</li>
+      </ul>
+
+      <h3>What each number means</h3>
+      <ul>
+        <li><b>ABV</b> is alcohol by volume, the headline strength of the beer.</li>
+        <li><b>Apparent attenuation</b> is how much of the measured gravity the yeast consumed. It reads high because alcohol is lighter than water and drags the final gravity down.</li>
+        <li><b>Real attenuation</b> backs the alcohol out and reflects the true fraction of sugar fermented. It is always the smaller, more honest figure.</li>
+        <li><b>Calories</b> combine alcohol and residual sugar, shown per 12&#160;oz and per 16&#160;oz (US pint).</li>
+      </ul>
+
+      <h3>Formulas used</h3>
+      <p class="formula">ABV = (76.08 &#215; (OG &#8722; FG) / (1.775 &#8722; OG)) &#215; (FG / 0.794)</p>
+      <p class="formula">Apparent att. = (OG &#8722; FG) / (OG &#8722; 1) &#215; 100</p>
+      <p class="formula">Real att. = (OE &#8722; RE) / OE &#215; 100,&#160; RE = 0.1808&#215;OE + 0.8192&#215;AE</p>
+      <p class="formula">Cal (12&#160;oz) = alcohol + residual-sugar calories from OG &amp; FG</p>
+      <p>OE and AE are the original and apparent extract in degrees Plato, from a standard specific-gravity-to-Plato polynomial. Brix to gravity uses the sucrose refractive-index relation.</p>
+      <p class="disclaim">Results are close estimates for planning and label copy, not lab measurements. Attenuation and calories assume normal wort; unusual adjuncts will shift the real figures.</p>
+
+    </div>
+  </details>
+
+</main>
+
+<footer>
+  App 088 in the <a href="https://augustineiacopelli.github.io/appaday/">AppADay</a> project by Augustine Iacopelli.<br>
+  One complete app, shipped every day.
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var LS_KEY = "appaday-088-brewmath";
+  var mode = "hyd"; // "hyd" | "ref"
+
+  var mHyd = document.getElementById("mHyd");
+  var mRef = document.getElementById("mRef");
+  var ogSg = document.getElementById("ogSg");
+  var fgSg = document.getElementById("fgSg");
+  var ogBx = document.getElementById("ogBx");
+  var fgBx = document.getElementById("fgBx");
+  var wcf  = document.getElementById("wcf");
+  var derived = document.getElementById("derived");
+  var msg  = document.getElementById("msg");
+  var reset = document.getElementById("reset");
+  var inputTitle = document.getElementById("inputTitle");
+  var calToggle = document.getElementById("calToggle");
+  var calpanel = document.getElementById("calpanel");
+  var calBx = document.getElementById("calBx");
+  var calSg = document.getElementById("calSg");
+  var calSolve = document.getElementById("calSolve");
+  var calClose = document.getElementById("calClose");
+  var calresult = document.getElementById("calresult");
+
+  var hydFields = document.querySelectorAll(".field.hyd");
+  var refFields = document.querySelectorAll(".ref");
+
+  var rAbv = document.getElementById("rAbv");
+  var rApp = document.getElementById("rApp");
+  var rReal = document.getElementById("rReal");
+  var rCal = document.getElementById("rCal");
+
+  // ---- math helpers ----
+  function brixToSG(bx){
+    return 1 + (bx / (258.6 - ((bx / 258.2) * 227.1)));
+  }
+  // exact inverse of brixToSG: true Brix from specific gravity
+  function sgToBrix(sg){
+    var k = 227.1 / 258.2;
+    return (sg - 1) * 258.6 / (1 + (sg - 1) * k);
+  }
+  function sgToPlato(sg){
+    return (-616.868) + (1111.14 * sg) - (630.272 * sg * sg) + (135.997 * sg * sg * sg);
+  }
+  // Terrill cubic FG correction using WCF-corrected Brix values
+  function refracFG(obc, fbc){
+    return 1.0000
+      - 0.0044993 * obc
+      + 0.011774 * fbc
+      + 0.00027581 * obc * obc
+      - 0.0012717 * fbc * fbc
+      - 0.00000728 * obc * obc * obc
+      + 0.000063293 * fbc * fbc * fbc;
+  }
+
+  function fmt(n, dp){
+    if(!isFinite(n)) return "\u2014";
+    return n.toFixed(dp);
+  }
+
+  function setCard(el, valHtml, subHtml){
+    var v = el.querySelector(".v");
+    var s = el.querySelector(".s");
+    v.innerHTML = valHtml;
+    if(subHtml !== null && subHtml !== undefined) s.innerHTML = subHtml;
+    el.classList.remove("dim");
+  }
+  function dimCard(el, subHtml){
+    el.querySelector(".v").innerHTML = "\u2014";
+    if(subHtml) el.querySelector(".s").innerHTML = subHtml;
+    el.classList.add("dim");
+  }
+  function dimAll(){
+    dimCard(rAbv,"alcohol by volume");
+    dimCard(rApp,"from measured gravity");
+    dimCard(rReal,"alcohol-adjusted");
+    dimCard(rCal,"per serving");
+  }
+
+  function showMsg(t){ msg.textContent = t; msg.classList.add("show"); }
+  function hideMsg(){ msg.textContent = ""; msg.classList.remove("show"); }
+
+  function markErr(el, on){ if(el){ if(on) el.classList.add("err"); else el.classList.remove("err"); } }
+
+  // ---- core compute ----
+  function compute(){
+    hideMsg();
+    markErr(ogSg,false); markErr(fgSg,false);
+    markErr(ogBx,false); markErr(fgBx,false); markErr(wcf,false);
+
+    var og, fg;
+
+    if(mode === "hyd"){
+      var so = parseFloat(ogSg.value);
+      var sf = parseFloat(fgSg.value);
+      if(isNaN(so) && isNaN(sf)){ dimAll(); return; }
+      if(isNaN(so) || isNaN(sf)){ dimAll(); return; }
+      // sanity: reject values that were clearly not entered as SG
+      if(so < 0.98 || so > 1.25){ markErr(ogSg,true); showMsg("Enter OG as specific gravity, like 1.052."); dimAll(); return; }
+      if(sf < 0.90 || sf > 1.25){ markErr(fgSg,true); showMsg("Enter FG as specific gravity, like 1.010."); dimAll(); return; }
+      og = so; fg = sf;
+    } else {
+      var bo = parseFloat(ogBx.value);
+      var bf = parseFloat(fgBx.value);
+      var wf = parseFloat(wcf.value);
+      if(isNaN(wf) || wf < 1.0 || wf > 1.10){ markErr(wcf,true); showMsg("Wort factor should sit between 1.00 and 1.10 (default 1.04)."); }
+      if(isNaN(wf) || wf <= 0) wf = 1.04;
+      if(isNaN(bo) && isNaN(bf)){ dimAll(); derived.hidden = true; return; }
+      if(isNaN(bo) || isNaN(bf)){ dimAll(); derived.hidden = true; return; }
+      if(bo < 1 || bo > 45){ markErr(ogBx,true); showMsg("Original reading should be in degrees Brix (roughly 4 to 30)."); dimAll(); derived.hidden = true; return; }
+      if(bf < 0 || bf > 45){ markErr(fgBx,true); showMsg("Final reading should be in degrees Brix."); dimAll(); derived.hidden = true; return; }
+      var obc = bo / wf;
+      var fbc = bf / wf;
+      og = brixToSG(obc);
+      fg = refracFG(obc, fbc);
+      derived.hidden = false;
+      derived.innerHTML = "Corrected gravity &#8594; OG <b>" + og.toFixed(3) + "</b> &#160; FG <b>" + fg.toFixed(3) + "</b>";
+    }
+
+    // shared guards
+    if(og <= 1.0){ markErr(mode==="hyd"?ogSg:ogBx,true); showMsg("Original gravity must be above 1.000."); dimAll(); return; }
+    if(fg >= og){ showMsg("Final gravity is not lower than original. Check the readings, or fermentation may be unfinished."); dimAll(); return; }
+    if(og >= 1.775){ showMsg("Original gravity is out of a workable range."); dimAll(); return; }
+
+    // ABV (accurate form)
+    var abv = (76.08 * (og - fg) / (1.775 - og)) * (fg / 0.794);
+
+    // apparent attenuation
+    var app = (og - fg) / (og - 1) * 100;
+
+    // real attenuation via Plato extracts
+    var oe = sgToPlato(og);
+    var ae = sgToPlato(fg);
+    var re = 0.1808 * oe + 0.8192 * ae;
+    var real = (oe - re) / oe * 100;
+
+    // calories
+    var calAlc = 1881.22 * fg * (og - fg) / (1.775 - og);
+    var calCarb = 3550.0 * fg * ((0.1808 * og) + (0.8192 * fg) - 1.0004);
+    var cal12 = calAlc + calCarb;
+    if(cal12 < 0) cal12 = 0;
+    var cal16 = cal12 * (16 / 12);
+
+    setCard(rAbv, fmt(abv,2) + "<span class='u'>%</span>", "alcohol by volume");
+    setCard(rApp, fmt(app,1) + "<span class='u'>%</span>", "from measured gravity");
+    setCard(rReal, fmt(real,1) + "<span class='u'>%</span>", "alcohol-adjusted");
+    setCard(rCal, Math.round(cal12) + "<span class='u'> cal</span>",
+      "per 12&#160;oz &#183; " + Math.round(cal16) + " cal per 16&#160;oz pint");
+
+    save();
+  }
+
+  // ---- mode switching ----
+  function setMode(m){
+    mode = m;
+    var isHyd = (m === "hyd");
+    mHyd.setAttribute("aria-pressed", isHyd ? "true" : "false");
+    mRef.setAttribute("aria-pressed", isHyd ? "false" : "true");
+    var i;
+    for(i=0;i<hydFields.length;i++){ hydFields[i].hidden = !isHyd; }
+    for(i=0;i<refFields.length;i++){ refFields[i].hidden = isHyd; }
+    inputTitle.textContent = isHyd ? "Gravity readings" : "Refractometer readings";
+    if(isHyd) derived.hidden = true;
+    closeCal();
+    compute();
+  }
+
+  // ---- calibration helper ----
+  function closeCal(){
+    calpanel.hidden = true;
+    calToggle.setAttribute("aria-expanded", "false");
+    calresult.hidden = true;
+    calresult.className = "calresult";
+  }
+  function solveWCF(){
+    markErr(calBx, false); markErr(calSg, false);
+    calresult.className = "calresult";
+    var bx = parseFloat(calBx.value);
+    var sg = parseFloat(calSg.value);
+    if(isNaN(bx) || bx <= 0 || bx > 45){
+      markErr(calBx, true);
+      calresult.hidden = false; calresult.classList.add("err");
+      calresult.textContent = "Enter the refractometer reading in degrees Brix.";
+      return;
+    }
+    if(isNaN(sg) || sg <= 1.0 || sg > 1.20){
+      markErr(calSg, true);
+      calresult.hidden = false; calresult.classList.add("err");
+      calresult.textContent = "Enter the hydrometer OG as a specific gravity above 1.000, like 1.050.";
+      return;
+    }
+    var trueBrix = sgToBrix(sg);
+    if(trueBrix <= 0){
+      calresult.hidden = false; calresult.classList.add("err");
+      calresult.textContent = "Those readings do not resolve to a valid factor. Re-check them.";
+      return;
+    }
+    var w = bx / trueBrix;
+    wcf.value = w.toFixed(3);
+    calresult.hidden = false;
+    var t = "Your wort factor is " + w.toFixed(3) + ". It is set above and now applied to your readings.";
+    if(w < 0.98 || w > 1.10){
+      calresult.classList.add("warn");
+      t += " That is outside the usual 1.02 to 1.06 band, so double-check both readings came from the same pre-yeast sample.";
+    }
+    calresult.textContent = t;
+    save();
+    compute();
+  }
+
+  // ---- persistence ----
+  function save(){
+    try{
+      var data = {
+        mode: mode,
+        ogSg: ogSg.value, fgSg: fgSg.value,
+        ogBx: ogBx.value, fgBx: fgBx.value, wcf: wcf.value,
+        calBx: calBx.value, calSg: calSg.value
+      };
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    }catch(e){}
+  }
+  function load(){
+    try{
+      var raw = localStorage.getItem(LS_KEY);
+      if(!raw) return;
+      var d = JSON.parse(raw);
+      if(d.ogSg) ogSg.value = d.ogSg;
+      if(d.fgSg) fgSg.value = d.fgSg;
+      if(d.ogBx) ogBx.value = d.ogBx;
+      if(d.fgBx) fgBx.value = d.fgBx;
+      if(d.wcf)  wcf.value  = d.wcf;
+      if(d.calBx) calBx.value = d.calBx;
+      if(d.calSg) calSg.value = d.calSg;
+      if(d.mode === "ref") mode = "ref";
+    }catch(e){}
+  }
+
+  // ---- wiring ----
+  mHyd.addEventListener("click", function(){ setMode("hyd"); });
+  mRef.addEventListener("click", function(){ setMode("ref"); });
+
+  var inputs = [ogSg, fgSg, ogBx, fgBx, wcf];
+  for(var i=0;i<inputs.length;i++){
+    inputs[i].addEventListener("input", compute);
+  }
+
+  calToggle.addEventListener("click", function(){
+    if(calpanel.hidden === false){
+      closeCal();
+    } else {
+      calpanel.hidden = false;
+      calToggle.setAttribute("aria-expanded", "true");
+      if(!calBx.value && ogBx.value) calBx.value = ogBx.value;
+    }
+  });
+  calClose.addEventListener("click", closeCal);
+  calSolve.addEventListener("click", solveWCF);
+  var calInputs = [calBx, calSg];
+  for(var j=0;j<calInputs.length;j++){
+    calInputs[j].addEventListener("input", save);
+  }
+
+  reset.addEventListener("click", function(){
+    ogSg.value = ""; fgSg.value = "";
+    ogBx.value = ""; fgBx.value = ""; wcf.value = "1.04";
+    calBx.value = ""; calSg.value = "";
+    derived.hidden = true;
+    closeCal();
+    hideMsg();
+    dimAll();
+    save();
+  });
+
+  load();
+  setMode(mode);
+})();
+</script>
+</body>
+</html>
